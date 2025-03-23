@@ -42,6 +42,8 @@ func initialModel() models {
 	mockNotes := []*Note{} // Create a slice with capacity for 4 items
 	for i := range 4 {
 		mockNotes = append(mockNotes, NewMockNote("test"+strconv.Itoa(i), i, 0))
+	}
+	for i := range 2 {
 		mockNotes = append(mockNotes, NewMockNote("test"+strconv.Itoa(i), i, 1))
 	}
 
@@ -106,6 +108,7 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.UIControl.TermSize.Height = msg.Height
 		m.UIControl.TermSize.Width = msg.Width
+
 	// Is it a key press?
 	case tea.KeyMsg:
 
@@ -124,23 +127,27 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// The "down" and "j" keys move the cursor down
 		case "down", "j":
-			//TODO Scope len() to each section column << DONE?
 			if notes := dp[m.UIControl.SectionCursor]; m.UIControl.RowCursor < len(notes)-1 {
 				m.UIControl.RowCursor++
 			}
 
+		// The "left" and "h" keys move the cursor left to the previous section
 		case "left", "h":
 			if m.UIControl.SectionCursor > 0 {
 				m.UIControl.SectionCursor--
-				m.UIControl.RowCursor = 0
+				if notesCount := len(dp[m.UIControl.SectionCursor]); m.UIControl.RowCursor > notesCount-1 {
+					m.UIControl.RowCursor = notesCount - 1
+				}
 			}
 
-		// The "down" and "j" keys move the cursor down
+		// The "left" and "h" keys move the cursor right to the next section
 		case "right", "l":
-			//TODO Scope len() to each section column << DONE?
 			if m.UIControl.SectionCursor < len(dp)-1 {
 				m.UIControl.SectionCursor++
-				m.UIControl.RowCursor = 0
+
+				if notesCount := len(dp[m.UIControl.SectionCursor]); m.UIControl.RowCursor > notesCount-1 {
+					m.UIControl.RowCursor = notesCount - 1
+				}
 			}
 
 		// The "enter" key and the spacebar (a literal space) toggle
@@ -232,8 +239,8 @@ func (m models) View() string {
 		}
 
 		// allText += lg.PlaceHorizontal(100, lg.Center, sectionText)
-		allText = lg.JoinHorizontal(lg.Right, allText, " ")
-		allText = lg.JoinHorizontal(lg.Right, allText, sectionText)
+		allText = lg.JoinHorizontal(lg.Top, allText, " ")
+		allText = lg.JoinHorizontal(lg.Top, allText, sectionText)
 	}
 
 	// The footer

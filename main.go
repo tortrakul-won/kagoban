@@ -19,9 +19,16 @@ import (
 
 var systemStyle = lg.NewStyle().
 	BorderStyle(lg.DoubleBorder()).BorderForeground(lg.Color("#33ffaa")).
-	Background(lg.Color("#000087")).
+	Background(lg.Color("#71797E")).
 	Foreground(lg.Color("#ffffff")).
-	Padding(2, 4)
+	Padding(2, 2)
+
+var cardStyle = lg.NewStyle().
+	BorderStyle(lg.OuterHalfBlockBorder()).BorderForeground(lg.Color("#6495ED")).
+	BorderBackground(lg.Color("#FFBF00")).
+	Background(lg.Color("#FFBF00")).
+	Foreground(lg.Color("#ffffff")).
+	Padding(1, 2)
 
 type models struct {
 	UIControl   UIControl
@@ -180,7 +187,7 @@ func (m models) View() string {
 	})
 
 	// Iterate over our choices
-	for i, section := range sectionList {
+	for _, section := range sectionList {
 		notesInSection := dpo[section.ID]
 
 		if len(notesInSection) == 0 {
@@ -206,13 +213,15 @@ func (m models) View() string {
 			}
 
 			tmpS := fmt.Sprintf("%s [%s] %s", cursor, checked, note.Content)
-
+			tmpS = cardStyle.Render(tmpS)
 			// Render the row
-			if m.UIControl.RowCursor == i {
+			if m.UIControl.RowCursor == note.Order {
 				tmpS = lg.NewStyle().Foreground(lg.Color("23")).Render(tmpS)
 			}
 
+			// s = lg.JoinVertical(lg.Bottom, s, tmpS)
 			s += tmpS
+			s += "\n"
 			s += "\n"
 		}
 	}

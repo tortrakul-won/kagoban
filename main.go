@@ -19,16 +19,18 @@ import (
 
 var systemStyle = lg.NewStyle().
 	BorderStyle(lg.DoubleBorder()).BorderForeground(lg.Color("#33ffaa")).
-	Background(lg.Color("#71797E")).
-	Foreground(lg.Color("#ffffff")).
-	Padding(2, 2)
+	// Background(lg.Color("#71797E")).
+	// Foreground(lg.Color("#ffffff"))
+	Padding(1, 2)
 
 var cardStyle = lg.NewStyle().
-	BorderStyle(lg.OuterHalfBlockBorder()).BorderForeground(lg.Color("#6495ED")).
-	BorderBackground(lg.Color("#FFBF00")).
-	Background(lg.Color("#FFBF00")).
-	Foreground(lg.Color("#ffffff")).
+	BorderStyle(lg.RoundedBorder()).BorderForeground(lg.Color("#6495ED")).
+	// BorderBackground(lg.Color("#FFBF00")).
+	// Background(lg.Color("#FFBF00")).
+	// Foreground(lg.Color("#ffffff")).
 	Padding(1, 2)
+
+var bgStyle = lg.NewStyle().Background(lg.Color("#FFBF00"))
 
 type models struct {
 	UIControl   UIControl
@@ -39,13 +41,15 @@ type models struct {
 func initialModel() models {
 	mockNotes := []*Note{} // Create a slice with capacity for 4 items
 	for i := range 4 {
-		mockNotes = append(mockNotes, NewMockNote("test"+strconv.Itoa(i), i))
+		mockNotes = append(mockNotes, NewMockNote("test"+strconv.Itoa(i), i, 0))
+		mockNotes = append(mockNotes, NewMockNote("test"+strconv.Itoa(i), i, 1))
 	}
 
 	return models{
 		Notes: mockNotes,
 		SectionData: []Section{
 			{ID: 0, Order: 0, Name: "Uncategorized"},
+			{ID: 1, Order: 1, Name: "Inbox"},
 		},
 	}
 }
@@ -158,7 +162,9 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m models) View() string {
 
 	// The header
-	s := "What should we buy at the market?\n\n"
+	// return spew.Sdump(m.Notes)
+
+	allText := ""
 
 	dpo := m.UIControl.DisplayOrder
 	sectionIDs := maps.Keys(dpo)
@@ -185,7 +191,6 @@ func (m models) View() string {
 	slices.SortFunc(sectionList, func(a, b Section) int {
 		return a.Order - b.Order
 	})
-
 	// Iterate over our choices
 	for _, section := range sectionList {
 		notesInSection := dpo[section.ID]
@@ -193,6 +198,8 @@ func (m models) View() string {
 		if len(notesInSection) == 0 {
 			continue
 		}
+
+		sectionText := ""
 
 		sortedNotes := slices.Clone(notesInSection)
 		slices.SortFunc(sortedNotes, func(a, b *Note) int {
@@ -220,17 +227,20 @@ func (m models) View() string {
 			}
 
 			// s = lg.JoinVertical(lg.Bottom, s, tmpS)
-			s += tmpS
-			s += "\n"
-			s += "\n"
+			sectionText += tmpS
+			sectionText += "\n"
 		}
+
+		// allText += lg.PlaceHorizontal(100, lg.Center, sectionText)
+		allText = lg.JoinHorizontal(lg.Right, allText, " ")
+		allText = lg.JoinHorizontal(lg.Right, allText, sectionText)
 	}
 
 	// The footer
-	s += "\nPress q to quit.\n"
+	allText += "\nPress q to quit.\n"
 
 	// Send the UI for rendering
-	return systemStyle.Width(m.UIControl.TermSize.Width - 3).Height(m.UIControl.TermSize.Height - 5).Render(s)
+	return systemStyle.Width(m.UIControl.TermSize.Width - 3).Height(m.UIControl.TermSize.Height - 5).Render(allText)
 
 }
 
@@ -262,12 +272,13 @@ func NewNote(content string) *Note {
 	}
 }
 
-func NewMockNote(content string, order int) *Note {
+func NewMockNote(content string, order int, sectionId int) *Note {
 	return &Note{
 		Content:     content,
 		DateUpdated: time.Now(),
 		DateCreated: time.Now(),
 		Order:       order,
+		SectionID:   sectionId,
 	}
 }
 

@@ -5,11 +5,12 @@ package main
 // You may also need to run `go mod tidy` to download bubbletea and its
 // dependencies.
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"maps"
 	"os"
 	"slices"
-	"sort"
 	"strconv"
 	"time"
 
@@ -176,6 +177,7 @@ func (m models) View() string {
 	dpo := m.UIControl.DisplayOrder
 	sectionIDs := maps.Keys(dpo)
 
+	//Collect Section Data
 	sectionList := []Section{}
 	for sid := range sectionIDs {
 
@@ -191,17 +193,15 @@ func (m models) View() string {
 	//now we have section data
 
 	// sort section id by SectionData.Order
-	sort.Slice(sectionList, func(i, j int) bool {
-		return sectionList[i].Order < sectionList[j].Order
-	})
-
 	slices.SortFunc(sectionList, func(a, b Section) int {
 		return a.Order - b.Order
 	})
-	// Iterate over our choices
-	for _, section := range sectionList {
+
+	// Iterate over our sections
+	for loopCnt, section := range sectionList {
 		notesInSection := dpo[section.ID]
 
+		//TODO Possibly have to remove this since we should be able to navigate to empty section
 		if len(notesInSection) == 0 {
 			continue
 		}
@@ -213,6 +213,7 @@ func (m models) View() string {
 			return a.Order - b.Order
 		})
 
+		// Iterate over our sortedNotes in the section
 		for _, note := range sortedNotes {
 			// Is the cursor pointing at this item?
 			cursor := " " // no cursor
@@ -228,9 +229,9 @@ func (m models) View() string {
 
 			tmpS := fmt.Sprintf("%s [%s] %s", cursor, checked, note.Content)
 			tmpS = cardStyle.Render(tmpS)
-			// Render the row
+
 			if m.UIControl.RowCursor == note.Order {
-				tmpS = lg.NewStyle().Foreground(lg.Color("23")).Render(tmpS)
+				// tmpS = lg.NewStyle().Foreground(lg.Color("23")).Render(tmpS)
 			}
 
 			// s = lg.JoinVertical(lg.Bottom, s, tmpS)
@@ -238,9 +239,10 @@ func (m models) View() string {
 			sectionText += "\n"
 		}
 
-		// allText += lg.PlaceHorizontal(100, lg.Center, sectionText)
-		allText = lg.JoinHorizontal(lg.Top, allText, " ")
 		allText = lg.JoinHorizontal(lg.Top, allText, sectionText)
+		if loopCnt < len(sectionList)-1 {
+			allText = lg.JoinHorizontal(lg.Top, allText, "   ")
+		}
 	}
 
 	// The footer
@@ -249,6 +251,14 @@ func (m models) View() string {
 	// Send the UI for rendering
 	return systemStyle.Width(m.UIControl.TermSize.Width - 3).Height(m.UIControl.TermSize.Height - 5).Render(allText)
 
+}
+
+func randomHex(n int) string {
+	bytes := make([]byte, n)
+	if _, err := rand.Read(bytes); err != nil {
+		return ""
+	}
+	return "#" + hex.EncodeToString(bytes)
 }
 
 func main() {

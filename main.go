@@ -29,7 +29,11 @@ var cardStyle = lg.NewStyle().
 	// BorderBackground(lg.Color("#FFBF00")).
 	// Background(lg.Color("#FFBF00")).
 	// Foreground(lg.Color("#ffffff")).
-	Padding(1, 2)
+	Padding(1, 2, 1, 0)
+
+var selectedStyle = lg.NewStyle().Inherit(cardStyle).
+	BorderStyle(lg.DoubleBorder()).BorderForeground(lg.Color("#6495ED")).
+	Padding(1, 2, 1, 0)
 
 var bgStyle = lg.NewStyle().Background(lg.Color("#FFBF00"))
 
@@ -228,10 +232,11 @@ func (m models) View() string {
 			}
 
 			tmpS := fmt.Sprintf("%s [%s] %s", cursor, checked, note.Content)
-			tmpS = cardStyle.Render(tmpS)
 
-			if m.UIControl.RowCursor == note.Order {
-				// tmpS = lg.NewStyle().Foreground(lg.Color("23")).Render(tmpS)
+			if m.UIControl.RowCursor == note.Order && m.UIControl.SectionCursor == section.Order {
+				tmpS = selectedStyle.Render(tmpS)
+			} else {
+				tmpS = cardStyle.Render(tmpS)
 			}
 
 			// s = lg.JoinVertical(lg.Bottom, s, tmpS)

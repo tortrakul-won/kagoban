@@ -74,12 +74,6 @@ func (m models) Init() tea.Cmd {
 }
 
 func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-
-	/* TODO
-	Update display order
-	right now reorder is not supported. it is sort by time
-	*/
-
 	/*
 		Group Notes with the same ID to Display order
 	*/
@@ -327,6 +321,7 @@ type Section struct {
 	ID    int    // Unique identifier for the Section
 	Order int    // Display order
 	Name  string // Section name
+	// HighestNoteOrder int    // Store height notes order for ordering
 }
 
 type UIControl struct {

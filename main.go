@@ -29,11 +29,14 @@ var cardStyle = lg.NewStyle().
 	// BorderBackground(lg.Color("#FFBF00")).
 	// Background(lg.Color("#FFBF00")).
 	// Foreground(lg.Color("#ffffff")).
-	Padding(1, 2, 1, 0)
+	Padding(1, 2, 1, 0).
+	Height(4).Width(20)
 
 var selectedStyle = lg.NewStyle().Inherit(cardStyle).
 	BorderStyle(lg.DoubleBorder()).BorderForeground(lg.Color("#6495ED")).
 	Padding(1, 2, 1, 0)
+
+var bold = lg.NewStyle().Bold(true)
 
 var bgStyle = lg.NewStyle().Background(lg.Color("#FFBF00"))
 
@@ -82,6 +85,10 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	*/
 	m.UIControl.DisplayOrder = make(map[int][]*Note)
 	dp := m.UIControl.DisplayOrder
+
+	for _, section := range m.SectionData {
+		dp[section.ID] = make([]*Note, 0)
+	}
 	for _, notePtr := range m.Notes {
 		dp[notePtr.SectionID] = append(dp[notePtr.SectionID], notePtr)
 	}
@@ -140,8 +147,13 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "left", "h":
 			if m.UIControl.SectionCursor > 0 {
 				m.UIControl.SectionCursor--
-				if notesCount := len(dp[m.UIControl.SectionCursor]); m.UIControl.RowCursor > notesCount-1 {
+
+				notesCount := len(dp[m.UIControl.SectionCursor])
+				if m.UIControl.RowCursor > notesCount-1 {
 					m.UIControl.RowCursor = notesCount - 1
+				}
+				if m.UIControl.RowCursor < 0 {
+					m.UIControl.RowCursor = 0
 				}
 			}
 
@@ -153,6 +165,9 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if notesCount := len(dp[m.UIControl.SectionCursor]); m.UIControl.RowCursor > notesCount-1 {
 					m.UIControl.RowCursor = notesCount - 1
 				}
+				if m.UIControl.RowCursor < 0 {
+					m.UIControl.RowCursor = 0
+				}
 			}
 
 		// The "enter" key and the spacebar (a literal space) toggle
@@ -160,8 +175,10 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter", " ":
 			sectionNotePtrs, ok := m.UIControl.DisplayOrder[m.UIControl.SectionCursor]
 			if ok {
-				notePtr := sectionNotePtrs[m.UIControl.RowCursor]
-				notePtr.IsChecked = !notePtr.IsChecked
+				if len(sectionNotePtrs) > 0 {
+					notePtr := sectionNotePtrs[m.UIControl.RowCursor]
+					notePtr.IsChecked = !notePtr.IsChecked
+				}
 			}
 		}
 	}
@@ -174,12 +191,12 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m models) View() string {
 
 	// The header
-	// return spew.Sdump(m.Notes)
-
 	allText := ""
 
 	dpo := m.UIControl.DisplayOrder
 	sectionIDs := maps.Keys(dpo)
+
+	// return spew.Sdump(dpo)
 
 	//Collect Section Data
 	sectionList := []Section{}
@@ -205,13 +222,15 @@ func (m models) View() string {
 	for loopCnt, section := range sectionList {
 		notesInSection := dpo[section.ID]
 
-		//TODO Possibly have to remove this since we should be able to navigate to empty section
-		if len(notesInSection) == 0 {
-			continue
-		}
-
 		sectionText := ""
 
+		if m.UIControl.SectionCursor == section.Order {
+			sectionText = bold.Underline(true).Render(section.Name)
+		} else {
+			sectionText = bold.Render(section.Name)
+		}
+
+		sectionText += "\n\n"
 		sortedNotes := slices.Clone(notesInSection)
 		slices.SortFunc(sortedNotes, func(a, b *Note) int {
 			return a.Order - b.Order
@@ -231,7 +250,7 @@ func (m models) View() string {
 				checked = "x"
 			}
 
-			tmpS := fmt.Sprintf("%s [%s] %s", cursor, checked, note.Content)
+			tmpS := fmt.Sprintf(" %s[%s] %s", cursor, checked, note.Content)
 
 			if m.UIControl.RowCursor == note.Order && m.UIControl.SectionCursor == section.Order {
 				tmpS = selectedStyle.Render(tmpS)
@@ -246,7 +265,7 @@ func (m models) View() string {
 
 		allText = lg.JoinHorizontal(lg.Top, allText, sectionText)
 		if loopCnt < len(sectionList)-1 {
-			allText = lg.JoinHorizontal(lg.Top, allText, "   ")
+			allText = lg.JoinHorizontal(lg.Top, allText, "        ")
 		}
 	}
 

@@ -48,6 +48,7 @@ type models struct {
 	UIControl   UIControl
 	Notes       []*Note
 	SectionData []Section
+	isInit      bool
 }
 
 func initialModel() models {
@@ -81,16 +82,12 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	/*
 		Group Notes with the same ID to Display order
 	*/
-	m.UIControl.DisplayOrder = make(map[int][]*Note)
+
+	if !m.isInit {
+		m.RepopulateDisplayOrder()
+		m.isInit = true
+	}
 	dp := m.UIControl.DisplayOrder
-
-	for _, section := range m.SectionData {
-		dp[section.ID] = make([]*Note, 0)
-	}
-	for _, notePtr := range m.Notes {
-		dp[notePtr.SectionID] = append(dp[notePtr.SectionID], notePtr)
-	}
-
 	/*
 		Lets think about the algo
 		concern:
@@ -182,9 +179,12 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "a":
 			sectionNotePtrs, ok := m.UIControl.DisplayOrder[m.UIControl.SectionCursor]
 			if ok {
-				maxOrder := slices.MaxFunc(sectionNotePtrs, func(a, b *Note) int {
-					return a.Order - b.Order
-				}).Order
+				maxOrder := 0
+				if len(sectionNotePtrs) > 0 {
+					maxOrder = slices.MaxFunc(sectionNotePtrs, func(a, b *Note) int {
+						return a.Order - b.Order
+					}).Order
+				}
 
 				sectionIdx := slices.IndexFunc(m.SectionData, func(sec Section) bool {
 					return sec.Order == m.UIControl.SectionCursor
@@ -209,12 +209,58 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.Notes = append(m.Notes, tmp...)
 				}
 			}
+
+		case "d":
+			_, ok := m.UIControl.DisplayOrder[m.UIControl.SectionCursor]
+			if ok {
+				sectionIdx := slices.IndexFunc(m.SectionData, func(sec Section) bool {
+					return sec.Order == m.UIControl.SectionCursor
+				})
+
+				if sectionIdx != -1 {
+					sec := m.SectionData[sectionIdx]
+
+					m.Notes = slices.DeleteFunc(m.Notes, func(n *Note) bool {
+						return n.Order == m.UIControl.RowCursor && n.SectionID == sec.ID
+					})
+
+					if m.UIControl.RowCursor > 0 {
+						m.UIControl.RowCursor--
+					}
+					m.RepopulateDisplayOrder()
+					RecalulateOrder(m.UIControl.DisplayOrder[sec.ID])
+				}
+			}
+
 		}
 	}
 
 	// Return the updated model to the Bubble Tea runtime for processing.
 	// Note that we're not returning a command.
 	return m, nil
+}
+
+func RecalulateOrder(notes []*Note) {
+	slices.SortFunc(notes, func(a, b *Note) int {
+		return a.Order - b.Order
+	})
+
+	for i := range len(notes) {
+		notes[i].Order = i
+	}
+
+}
+
+func (m *models) RepopulateDisplayOrder() {
+	m.UIControl.DisplayOrder = make(map[int][]*Note)
+	dp := m.UIControl.DisplayOrder
+
+	for _, section := range m.SectionData {
+		dp[section.ID] = make([]*Note, 0)
+	}
+	for _, notePtr := range m.Notes {
+		dp[notePtr.SectionID] = append(dp[notePtr.SectionID], notePtr)
+	}
 }
 
 func (m models) View() string {

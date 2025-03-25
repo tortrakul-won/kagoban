@@ -18,6 +18,10 @@ import (
 	lg "github.com/charmbracelet/lipgloss"
 )
 
+const (
+	CardBorderColor = "#6495ED"
+)
+
 var systemStyle = lg.NewStyle().
 	BorderStyle(lg.DoubleBorder()).BorderForeground(lg.Color("#33ffaa")).
 	// Background(lg.Color("#71797E")).
@@ -25,7 +29,7 @@ var systemStyle = lg.NewStyle().
 	Padding(1, 2)
 
 var cardStyle = lg.NewStyle().
-	BorderStyle(lg.RoundedBorder()).BorderForeground(lg.Color("#6495ED")).
+	BorderStyle(lg.RoundedBorder()).BorderForeground(lg.Color(CardBorderColor)).
 	// BorderBackground(lg.Color("#FFBF00")).
 	// Background(lg.Color("#FFBF00")).
 	// Foreground(lg.Color("#ffffff")).
@@ -33,12 +37,12 @@ var cardStyle = lg.NewStyle().
 	Height(4).Width(20)
 
 var selectedStyle = lg.NewStyle().Inherit(cardStyle).
-	BorderStyle(lg.DoubleBorder()).BorderForeground(lg.Color("#6495ED")).
+	BorderStyle(lg.DoubleBorder()).BorderForeground(lg.Color(CardBorderColor)).
 	Padding(1, 2, 1, 0)
 
 var bold = lg.NewStyle().Bold(true)
 
-var bgStyle = lg.NewStyle().Background(lg.Color("#FFBF00"))
+// var bgStyle = lg.NewStyle().Background(lg.Color("#FFBF00"))
 
 type models struct {
 	UIControl   UIControl
@@ -172,6 +176,37 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if len(sectionNotePtrs) > 0 {
 					notePtr := sectionNotePtrs[m.UIControl.RowCursor]
 					notePtr.IsChecked = !notePtr.IsChecked
+				}
+			}
+
+		case "a":
+			sectionNotePtrs, ok := m.UIControl.DisplayOrder[m.UIControl.SectionCursor]
+			if ok {
+				maxOrder := slices.MaxFunc(sectionNotePtrs, func(a, b *Note) int {
+					return a.Order - b.Order
+				}).Order
+
+				sectionIdx := slices.IndexFunc(m.SectionData, func(sec Section) bool {
+					return sec.Order == m.UIControl.SectionCursor
+				})
+
+				/*TODO There must be better way to link the data. This manually delete is not bad but
+				I have a feeling that it can be better
+				*/
+				/*
+					Maybe I should just manipulate the original array and repopulate displayOrder every Update
+				*/
+				if sectionIdx != -1 {
+					sec := m.SectionData[sectionIdx]
+					buffer := NewMockNote("test"+strconv.Itoa(maxOrder+1), maxOrder+1, sec.ID)
+					tmp := append(sectionNotePtrs, buffer)
+					m.UIControl.DisplayOrder[m.UIControl.SectionCursor] = tmp
+
+					m.Notes = slices.DeleteFunc(m.Notes, func(n *Note) bool {
+						return n.SectionID == sec.ID
+					})
+
+					m.Notes = append(m.Notes, tmp...)
 				}
 			}
 		}

@@ -22,6 +22,8 @@ const (
 	CardBorderColor = "#6495ED"
 )
 
+var mockId = 10
+
 var systemStyle = lg.NewStyle().
 	BorderStyle(lg.DoubleBorder()).BorderForeground(lg.Color("#33ffaa")).
 	// Background(lg.Color("#71797E")).
@@ -134,7 +136,11 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// The "down" and "j" keys move the cursor down
 		case "down", "j":
-			if notes := dp[m.UIControl.SectionCursor]; m.UIControl.RowCursor < len(notes)-1 {
+			section, ok := FindSectionByOrder(m.SectionData, m.UIControl.SectionCursor)
+			if !ok {
+				return m, nil
+			}
+			if notes := dp[section.ID]; m.UIControl.RowCursor < len(notes)-1 {
 				m.UIControl.RowCursor++
 			}
 
@@ -143,7 +149,11 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.UIControl.SectionCursor > 0 {
 				m.UIControl.SectionCursor--
 
-				notesCount := len(dp[m.UIControl.SectionCursor])
+				section, ok := FindSectionByOrder(m.SectionData, m.UIControl.SectionCursor)
+				if !ok {
+					return m, nil
+				}
+				notesCount := len(dp[section.ID])
 				if m.UIControl.RowCursor > notesCount-1 {
 					m.UIControl.RowCursor = notesCount - 1
 				}
@@ -157,7 +167,11 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.UIControl.SectionCursor < len(dp)-1 {
 				m.UIControl.SectionCursor++
 
-				if notesCount := len(dp[m.UIControl.SectionCursor]); m.UIControl.RowCursor > notesCount-1 {
+				section, ok := FindSectionByOrder(m.SectionData, m.UIControl.SectionCursor)
+				if !ok {
+					return m, nil
+				}
+				if notesCount := len(dp[section.ID]); m.UIControl.RowCursor > notesCount-1 {
 					m.UIControl.RowCursor = notesCount - 1
 				}
 				if m.UIControl.RowCursor < 0 {
@@ -168,7 +182,12 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// The "enter" key and the spacebar (a literal space) toggle
 		// the selected state for the item that the cursor is pointing at.
 		case "enter", " ":
-			sectionNotePtrs, ok := m.UIControl.DisplayOrder[m.UIControl.SectionCursor]
+			section, ok := FindSectionByOrder(m.SectionData, m.UIControl.SectionCursor)
+			if !ok {
+				return m, nil
+			}
+
+			sectionNotePtrs, ok := m.UIControl.DisplayOrder[section.ID]
 			if ok {
 				if len(sectionNotePtrs) > 0 {
 					notePtr := sectionNotePtrs[m.UIControl.RowCursor]
@@ -177,13 +196,20 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "a":
-			sectionNotePtrs, ok := m.UIControl.DisplayOrder[m.UIControl.SectionCursor]
+			section, ok := FindSectionByOrder(m.SectionData, m.UIControl.SectionCursor)
+			if !ok {
+				return m, nil
+			}
+			sectionNotePtrs, ok := m.UIControl.DisplayOrder[section.ID]
 			if ok {
-				maxOrder := 0
+				maxOrder := -1
 				if len(sectionNotePtrs) > 0 {
 					maxOrder = slices.MaxFunc(sectionNotePtrs, func(a, b *Note) int {
 						return a.Order - b.Order
 					}).Order
+				} else {
+					//Hijack this control flow to fix cursor after add notes in an empty section
+					m.UIControl.RowCursor = 0
 				}
 
 				sectionIdx := slices.IndexFunc(m.SectionData, func(sec Section) bool {
@@ -200,7 +226,7 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					sec := m.SectionData[sectionIdx]
 					buffer := NewMockNote("test"+strconv.Itoa(maxOrder+1), maxOrder+1, sec.ID)
 					tmp := append(sectionNotePtrs, buffer)
-					m.UIControl.DisplayOrder[m.UIControl.SectionCursor] = tmp
+					m.UIControl.DisplayOrder[section.ID] = tmp
 
 					m.Notes = slices.DeleteFunc(m.Notes, func(n *Note) bool {
 						return n.SectionID == sec.ID
@@ -211,8 +237,11 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "d":
-			_, ok := m.UIControl.DisplayOrder[m.UIControl.SectionCursor]
-			if ok {
+			section, ok := FindSectionByOrder(m.SectionData, m.UIControl.SectionCursor)
+			if !ok {
+				return m, nil
+			}
+			if _, ok = m.UIControl.DisplayOrder[section.ID]; ok {
 				sectionIdx := slices.IndexFunc(m.SectionData, func(sec Section) bool {
 					return sec.Order == m.UIControl.SectionCursor
 				})
@@ -228,10 +257,49 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.UIControl.RowCursor--
 					}
 					m.RepopulateDisplayOrder()
-					RecalulateOrder(m.UIControl.DisplayOrder[sec.ID])
+					RecalulateNoteOrder(m.UIControl.DisplayOrder[sec.ID])
 				}
 			}
 
+		case "A":
+			maxOrder := -1
+			if len(m.SectionData) > 0 {
+				maxOrder = slices.MaxFunc(m.SectionData, func(a, b Section) int {
+					return a.Order - b.Order
+				}).Order
+			}
+			mockId++
+			m.SectionData = append(m.SectionData, NewMockSection("TestSection", maxOrder+1, mockId))
+			m.RepopulateDisplayOrder()
+
+		case "D":
+
+			if len(m.SectionData) == 1 {
+				break
+			}
+
+			sectionIdx := slices.IndexFunc(m.SectionData, func(sec Section) bool {
+				return sec.Order == m.UIControl.SectionCursor
+			})
+
+			if sectionIdx != -1 {
+				sec := m.SectionData[sectionIdx]
+				//Delete Notes Data
+				m.Notes = slices.DeleteFunc(m.Notes, func(n *Note) bool {
+					return n.SectionID == sec.ID
+				})
+			}
+
+			//Delete Section Data
+			// m.SectionData = slices.DeleteFunc(m.SectionData, func(sec Section) bool { return sec.Order == m.UIControl.SectionCursor })
+			m.SectionData = slices.Delete(m.SectionData, sectionIdx, sectionIdx+1)
+			//Recalculate Section Order
+			m.RepopulateDisplayOrder()
+			RecalulateSectionOrder(m.SectionData)
+
+			if m.UIControl.SectionCursor > 0 {
+				m.UIControl.SectionCursor--
+			}
 		}
 	}
 
@@ -240,13 +308,36 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func RecalulateOrder(notes []*Note) {
+func FindSectionByOrder(data []Section, order int) (Section, bool) {
+	sIX := slices.IndexFunc(data, func(s Section) bool {
+		return s.Order == order
+	})
+
+	if sIX != -1 {
+		return data[sIX], true
+	} else {
+		return Section{}, false
+	}
+}
+
+func RecalulateNoteOrder(notes []*Note) {
 	slices.SortFunc(notes, func(a, b *Note) int {
 		return a.Order - b.Order
 	})
 
 	for i := range len(notes) {
 		notes[i].Order = i
+	}
+
+}
+
+func RecalulateSectionOrder(section []Section) {
+	slices.SortFunc(section, func(a, b Section) int {
+		return a.Order - b.Order
+	})
+
+	for i := range len(section) {
+		section[i].Order = i
 	}
 
 }
@@ -300,9 +391,9 @@ func (m models) View() string {
 		sectionText := ""
 
 		if m.UIControl.SectionCursor == section.Order {
-			sectionText = bold.Underline(true).Render(section.Name)
+			sectionText = bold.Underline(true).Render(section.Name + strconv.Itoa(section.ID))
 		} else {
-			sectionText = bold.Render(section.Name)
+			sectionText = bold.Render(section.Name + strconv.Itoa(section.ID))
 		}
 
 		sectionText += "\n\n"
@@ -347,9 +438,28 @@ func (m models) View() string {
 	// The footer
 	allText += "\nPress q to quit.\n"
 
+	// DEBUG
+	// allText += spew.Sdump(m.SectionData)
+	// allText += fmt.Sprintf("RowCursor = %d,SectionCursor= %d\n", m.UIControl.RowCursor, m.UIControl.SectionCursor)
+	// allText += fmt.Sprintf("DisplayOrder Len = %d\n", len(m.UIControl.DisplayOrder))
+	// for _, s := range m.SectionData {
+	// 	allText += strconv.Itoa(s.ID)
+	// 	allText += ", "
+	// }
+	// section, _ := FindSectionByOrder(m.SectionData, m.UIControl.SectionCursor)
+	// allText += spew.Sdump(m.UIControl.DisplayOrder[section.ID])
+
 	// Send the UI for rendering
 	return systemStyle.Width(m.UIControl.TermSize.Width - 3).Height(m.UIControl.TermSize.Height - 5).Render(allText)
 
+}
+
+func mapSlice(input []int, transform func(int) int) []int {
+	result := make([]int, len(input))
+	for i, v := range input {
+		result[i] = transform(v)
+	}
+	return result
 }
 
 func randomHex(n int) string {
@@ -395,6 +505,14 @@ func NewMockNote(content string, order int, sectionId int) *Note {
 		DateCreated: time.Now(),
 		Order:       order,
 		SectionID:   sectionId,
+	}
+}
+
+func NewMockSection(content string, order int, sectionId int) Section {
+	return Section{
+		Name:  content,
+		ID:    sectionId,
+		Order: order,
 	}
 }
 

@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	lg "github.com/charmbracelet/lipgloss"
 )
@@ -47,20 +48,29 @@ var bold = lg.NewStyle().Bold(true)
 // var bgStyle = lg.NewStyle().Background(lg.Color("#FFBF00"))
 
 type models struct {
-	UIControl   UIControl
-	Notes       []*Note
-	SectionData []Section
-	isInit      bool
+	UIControl        UIControl
+	Notes            []*Note
+	SectionData      []Section
+	IsInit           bool
+	IsTextInputShown bool
+	TextInput        textinput.Model
+	InputPrompt      string
+	Operation        string // Might change to enum
+	Debug            string
 }
 
 func initialModel() models {
 	mockNotes := []*Note{} // Create a slice with capacity for 4 items
 	for i := range 4 {
-		mockNotes = append(mockNotes, NewMockNote("test"+strconv.Itoa(i), i, 0))
+		mockNotes = append(mockNotes, NewNote("test"+strconv.Itoa(i), i, 0))
 	}
 	for i := range 2 {
-		mockNotes = append(mockNotes, NewMockNote("test"+strconv.Itoa(i), i, 1))
+		mockNotes = append(mockNotes, NewNote("test"+strconv.Itoa(i), i, 1))
 	}
+
+	ti := textinput.New()
+	ti.CharLimit = 156
+	ti.Width = 20
 
 	return models{
 		Notes: mockNotes,
@@ -68,6 +78,7 @@ func initialModel() models {
 			{ID: 0, Order: 0, Name: "Uncategorized"},
 			{ID: 1, Order: 1, Name: "Inbox"},
 		},
+		TextInput: ti,
 	}
 }
 
@@ -77,17 +88,18 @@ func (m models) Init() tea.Cmd {
 	/*
 		Maybe check if there is section that I otherwise create the uncategorized one.
 	*/
-	return nil
+	return textinput.Blink
 }
 
 func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	/*
 		Group Notes with the same ID to Display order
 	*/
+	var cmd tea.Cmd
 
-	if !m.isInit {
+	if !m.IsInit {
 		m.RepopulateDisplayOrder()
-		m.isInit = true
+		m.IsInit = true
 	}
 	dp := m.UIControl.DisplayOrder
 	/*
@@ -102,210 +114,238 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	*/
 
-	// *** DO THIS when ADD and REORDER
-	// for sectionID, notes := range dp {
-	// 	currMax := slices.MaxFunc(notes, func(a, b *Note) int {
-	// 		return a.Order - b.Order
-	// 	}).Order
+	if m.IsTextInputShown {
+		switch msg := msg.(type) {
+		case tea.WindowSizeMsg:
+			m.UIControl.TermSize.Height = msg.Height
+			m.UIControl.TermSize.Width = msg.Width
 
-	// 	sort.Slice(notes, func(i, j int) bool {
-	// 		return notes[i].DateCreated
-	// 	})
-	// }
+		// Is it a key press?
+		case tea.KeyMsg:
+			switch msg.String() {
+			case "enter":
+				if m.Operation == "ADDNOTE" {
+					m.Debug = "123"
+					m.TextInput.Blur()
+					content := m.TextInput.Value()
+					AddNote(&m, content)
 
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.UIControl.TermSize.Height = msg.Height
-		m.UIControl.TermSize.Width = msg.Width
+					m.TextInput.SetValue("")
+				}
 
-	// Is it a key press?
-	case tea.KeyMsg:
+				m.Operation = ""
+				m.IsTextInputShown = false
 
-		// Cool, what was the actual key pressed?
-		switch msg.String() {
-
-		// These keys should exit the program.
-		case "ctrl+c", "q":
-			return m, tea.Quit
-
-		// The "up" and "k" keys move the cursor up
-		case "up", "k":
-			if m.UIControl.RowCursor > 0 {
-				m.UIControl.RowCursor--
+			case "esc":
+				m.Operation = ""
+				m.IsTextInputShown = false
+				m.TextInput.SetValue("")
 			}
+		}
+		m.TextInput, cmd = m.TextInput.Update(msg)
+		return m, cmd
 
-		// The "down" and "j" keys move the cursor down
-		case "down", "j":
-			section, ok := FindSectionByOrder(m.SectionData, m.UIControl.SectionCursor)
-			if !ok {
-				return m, nil
-			}
-			if notes := dp[section.ID]; m.UIControl.RowCursor < len(notes)-1 {
-				m.UIControl.RowCursor++
-			}
+	} else {
+		switch msg := msg.(type) {
+		case tea.WindowSizeMsg:
+			m.UIControl.TermSize.Height = msg.Height
+			m.UIControl.TermSize.Width = msg.Width
 
-		// The "left" and "h" keys move the cursor left to the previous section
-		case "left", "h":
-			if m.UIControl.SectionCursor > 0 {
-				m.UIControl.SectionCursor--
+		// Is it a key press?
+		case tea.KeyMsg:
+			switch msg.String() {
+			case "ctrl+c", "q":
+				return m, tea.Quit
 
+			// The "up" and "k" keys move the cursor up
+			case "up", "k":
+				if m.UIControl.RowCursor > 0 {
+					m.UIControl.RowCursor--
+				}
+
+			// The "down" and "j" keys move the cursor down
+			case "down", "j":
 				section, ok := FindSectionByOrder(m.SectionData, m.UIControl.SectionCursor)
 				if !ok {
 					return m, nil
 				}
-				notesCount := len(dp[section.ID])
-				if m.UIControl.RowCursor > notesCount-1 {
-					m.UIControl.RowCursor = notesCount - 1
+				if notes := dp[section.ID]; m.UIControl.RowCursor < len(notes)-1 {
+					m.UIControl.RowCursor++
 				}
-				if m.UIControl.RowCursor < 0 {
-					m.UIControl.RowCursor = 0
+
+			// The "left" and "h" keys move the cursor left to the previous section
+			case "left", "h":
+				if m.UIControl.SectionCursor > 0 {
+					m.UIControl.SectionCursor--
+
+					section, ok := FindSectionByOrder(m.SectionData, m.UIControl.SectionCursor)
+					if !ok {
+						return m, nil
+					}
+					notesCount := len(dp[section.ID])
+					if m.UIControl.RowCursor > notesCount-1 {
+						m.UIControl.RowCursor = notesCount - 1
+					}
+					if m.UIControl.RowCursor < 0 {
+						m.UIControl.RowCursor = 0
+					}
 				}
-			}
 
-		// The "left" and "h" keys move the cursor right to the next section
-		case "right", "l":
-			if m.UIControl.SectionCursor < len(dp)-1 {
-				m.UIControl.SectionCursor++
+			// The "left" and "h" keys move the cursor right to the next section
+			case "right", "l":
+				if m.UIControl.SectionCursor < len(dp)-1 {
+					m.UIControl.SectionCursor++
 
+					section, ok := FindSectionByOrder(m.SectionData, m.UIControl.SectionCursor)
+					if !ok {
+						return m, nil
+					}
+					if notesCount := len(dp[section.ID]); m.UIControl.RowCursor > notesCount-1 {
+						m.UIControl.RowCursor = notesCount - 1
+					}
+					if m.UIControl.RowCursor < 0 {
+						m.UIControl.RowCursor = 0
+					}
+				}
+
+			// The "enter" key and the spacebar (a literal space) toggle
+			// the selected state for the item that the cursor is pointing at.
+			case "enter", " ":
 				section, ok := FindSectionByOrder(m.SectionData, m.UIControl.SectionCursor)
 				if !ok {
 					return m, nil
 				}
-				if notesCount := len(dp[section.ID]); m.UIControl.RowCursor > notesCount-1 {
-					m.UIControl.RowCursor = notesCount - 1
-				}
-				if m.UIControl.RowCursor < 0 {
-					m.UIControl.RowCursor = 0
-				}
-			}
 
-		// The "enter" key and the spacebar (a literal space) toggle
-		// the selected state for the item that the cursor is pointing at.
-		case "enter", " ":
-			section, ok := FindSectionByOrder(m.SectionData, m.UIControl.SectionCursor)
-			if !ok {
-				return m, nil
-			}
-
-			sectionNotePtrs, ok := m.UIControl.DisplayOrder[section.ID]
-			if ok {
-				if len(sectionNotePtrs) > 0 {
-					notePtr := sectionNotePtrs[m.UIControl.RowCursor]
-					notePtr.IsChecked = !notePtr.IsChecked
+				sectionNotePtrs, ok := m.UIControl.DisplayOrder[section.ID]
+				if ok {
+					if len(sectionNotePtrs) > 0 {
+						notePtr := sectionNotePtrs[m.UIControl.RowCursor]
+						notePtr.IsChecked = !notePtr.IsChecked
+					}
 				}
-			}
 
-		case "a":
-			section, ok := FindSectionByOrder(m.SectionData, m.UIControl.SectionCursor)
-			if !ok {
-				return m, nil
-			}
-			sectionNotePtrs, ok := m.UIControl.DisplayOrder[section.ID]
-			if ok {
+			case "a":
+				m.Operation = "ADDNOTE"
+				m.IsTextInputShown = true
+				m.InputPrompt = "What is the content of the note?"
+				m.TextInput.Placeholder = "Type note content here"
+				m.TextInput.SetValue("")
+				m.TextInput, cmd = m.TextInput.Update(nil)
+				m.TextInput.Focus()
+				return m, cmd
+
+			case "d":
+				section, ok := FindSectionByOrder(m.SectionData, m.UIControl.SectionCursor)
+				if !ok {
+					return m, nil
+				}
+				if _, ok = m.UIControl.DisplayOrder[section.ID]; ok {
+					sectionIdx := slices.IndexFunc(m.SectionData, func(sec Section) bool {
+						return sec.Order == m.UIControl.SectionCursor
+					})
+
+					if sectionIdx != -1 {
+						sec := m.SectionData[sectionIdx]
+
+						m.Notes = slices.DeleteFunc(m.Notes, func(n *Note) bool {
+							return n.Order == m.UIControl.RowCursor && n.SectionID == sec.ID
+						})
+
+						if m.UIControl.RowCursor > 0 {
+							m.UIControl.RowCursor--
+						}
+						m.RepopulateDisplayOrder()
+						RecalulateNoteOrder(m.UIControl.DisplayOrder[sec.ID])
+					}
+				}
+
+			case "A":
 				maxOrder := -1
-				if len(sectionNotePtrs) > 0 {
-					maxOrder = slices.MaxFunc(sectionNotePtrs, func(a, b *Note) int {
+				if len(m.SectionData) > 0 {
+					maxOrder = slices.MaxFunc(m.SectionData, func(a, b Section) int {
 						return a.Order - b.Order
 					}).Order
-				} else {
-					//Hijack this control flow to fix cursor after add notes in an empty section
-					m.UIControl.RowCursor = 0
+				}
+				mockId++
+				m.SectionData = append(m.SectionData, NewMockSection("TestSection", maxOrder+1, mockId))
+				m.RepopulateDisplayOrder()
+
+			case "D":
+
+				if len(m.SectionData) == 1 {
+					break
 				}
 
 				sectionIdx := slices.IndexFunc(m.SectionData, func(sec Section) bool {
 					return sec.Order == m.UIControl.SectionCursor
 				})
 
-				/*TODO There must be better way to link the data. This manually delete is not bad but
-				I have a feeling that it can be better
-				*/
-				/*
-					Maybe I should just manipulate the original array and repopulate displayOrder every Update
-				*/
 				if sectionIdx != -1 {
 					sec := m.SectionData[sectionIdx]
-					buffer := NewMockNote("test"+strconv.Itoa(maxOrder+1), maxOrder+1, sec.ID)
-					tmp := append(sectionNotePtrs, buffer)
-					m.UIControl.DisplayOrder[section.ID] = tmp
-
+					//Delete Notes Data
 					m.Notes = slices.DeleteFunc(m.Notes, func(n *Note) bool {
 						return n.SectionID == sec.ID
 					})
-
-					m.Notes = append(m.Notes, tmp...)
 				}
-			}
 
-		case "d":
-			section, ok := FindSectionByOrder(m.SectionData, m.UIControl.SectionCursor)
-			if !ok {
-				return m, nil
-			}
-			if _, ok = m.UIControl.DisplayOrder[section.ID]; ok {
-				sectionIdx := slices.IndexFunc(m.SectionData, func(sec Section) bool {
-					return sec.Order == m.UIControl.SectionCursor
-				})
+				//Delete Section Data
+				// m.SectionData = slices.DeleteFunc(m.SectionData, func(sec Section) bool { return sec.Order == m.UIControl.SectionCursor })
+				m.SectionData = slices.Delete(m.SectionData, sectionIdx, sectionIdx+1)
+				//Recalculate Section Order
+				m.RepopulateDisplayOrder()
+				RecalulateSectionOrder(m.SectionData)
 
-				if sectionIdx != -1 {
-					sec := m.SectionData[sectionIdx]
-
-					m.Notes = slices.DeleteFunc(m.Notes, func(n *Note) bool {
-						return n.Order == m.UIControl.RowCursor && n.SectionID == sec.ID
-					})
-
-					if m.UIControl.RowCursor > 0 {
-						m.UIControl.RowCursor--
-					}
-					m.RepopulateDisplayOrder()
-					RecalulateNoteOrder(m.UIControl.DisplayOrder[sec.ID])
+				if m.UIControl.SectionCursor > 0 {
+					m.UIControl.SectionCursor--
 				}
-			}
-
-		case "A":
-			maxOrder := -1
-			if len(m.SectionData) > 0 {
-				maxOrder = slices.MaxFunc(m.SectionData, func(a, b Section) int {
-					return a.Order - b.Order
-				}).Order
-			}
-			mockId++
-			m.SectionData = append(m.SectionData, NewMockSection("TestSection", maxOrder+1, mockId))
-			m.RepopulateDisplayOrder()
-
-		case "D":
-
-			if len(m.SectionData) == 1 {
-				break
-			}
-
-			sectionIdx := slices.IndexFunc(m.SectionData, func(sec Section) bool {
-				return sec.Order == m.UIControl.SectionCursor
-			})
-
-			if sectionIdx != -1 {
-				sec := m.SectionData[sectionIdx]
-				//Delete Notes Data
-				m.Notes = slices.DeleteFunc(m.Notes, func(n *Note) bool {
-					return n.SectionID == sec.ID
-				})
-			}
-
-			//Delete Section Data
-			// m.SectionData = slices.DeleteFunc(m.SectionData, func(sec Section) bool { return sec.Order == m.UIControl.SectionCursor })
-			m.SectionData = slices.Delete(m.SectionData, sectionIdx, sectionIdx+1)
-			//Recalculate Section Order
-			m.RepopulateDisplayOrder()
-			RecalulateSectionOrder(m.SectionData)
-
-			if m.UIControl.SectionCursor > 0 {
-				m.UIControl.SectionCursor--
 			}
 		}
 	}
 
-	// Return the updated model to the Bubble Tea runtime for processing.
-	// Note that we're not returning a command.
-	return m, nil
+	m.RepopulateDisplayOrder()
+	return m, cmd
+}
+
+func AddNote(m *models, content string) bool {
+	section, ok := FindSectionByOrder(m.SectionData, m.UIControl.SectionCursor)
+	if !ok {
+		return false
+	}
+	sectionNotePtrs, ok := m.UIControl.DisplayOrder[section.ID]
+	if ok {
+		maxOrder := -1
+		if len(sectionNotePtrs) > 0 {
+			maxOrder = slices.MaxFunc(sectionNotePtrs, func(a, b *Note) int {
+				return a.Order - b.Order
+			}).Order
+		} else {
+			//Hijack this control flow to fix cursor after add notes in an empty section
+			m.UIControl.RowCursor = 0
+		}
+
+		sectionIdx := slices.IndexFunc(m.SectionData, func(sec Section) bool {
+			return sec.Order == m.UIControl.SectionCursor
+		})
+		/*TODO There must be better way to link the data. This manually delete is not bad but
+		I have a feeling that it can be better
+		*/
+		/*
+			Maybe I should just manipulate the original array and repopulate displayOrder every Update
+		*/
+		if sectionIdx != -1 {
+			sec := m.SectionData[sectionIdx]
+			buffer := NewNote(content, maxOrder+1, sec.ID)
+			tmp := append(sectionNotePtrs, buffer)
+			m.UIControl.DisplayOrder[section.ID] = tmp
+
+			m.Notes = slices.DeleteFunc(m.Notes, func(n *Note) bool {
+				return n.SectionID == sec.ID
+			})
+
+			m.Notes = append(m.Notes, tmp...)
+		}
+	}
+	return true
 }
 
 func FindSectionByOrder(data []Section, order int) (Section, bool) {
@@ -318,6 +358,17 @@ func FindSectionByOrder(data []Section, order int) (Section, bool) {
 	} else {
 		return Section{}, false
 	}
+}
+
+func FindNotesBySectionOrder(data models, order int) ([]*Note, bool) {
+	section, ok := FindSectionByOrder(data.SectionData, order)
+	if !ok {
+		return []*Note{}, false
+	}
+	notes, ok := data.UIControl.DisplayOrder[section.ID]
+
+	return notes, true
+
 }
 
 func RecalulateNoteOrder(notes []*Note) {
@@ -436,10 +487,22 @@ func (m models) View() string {
 	}
 
 	// The footer
-	allText += "\nPress q to quit.\n"
+
+	if m.IsTextInputShown {
+		allText += fmt.Sprintf(
+			"\n%s\n\n%s\n\n%s",
+			m.InputPrompt,
+			m.TextInput.View(),
+			"(esc to cancel)\n",
+		)
+	} else {
+		allText += "\nPress q to quit.\n"
+
+	}
 
 	// DEBUG
 	// allText += spew.Sdump(m.SectionData)
+	// allText += m.Debug
 	// allText += fmt.Sprintf("RowCursor = %d,SectionCursor= %d\n", m.UIControl.RowCursor, m.UIControl.SectionCursor)
 	// allText += fmt.Sprintf("DisplayOrder Len = %d\n", len(m.UIControl.DisplayOrder))
 	// for _, s := range m.SectionData {
@@ -490,15 +553,7 @@ type Note struct {
 	IsDeleted   bool      // Flag for soft deletion
 }
 
-func NewNote(content string) *Note {
-	return &Note{
-		Content:     content,
-		DateUpdated: time.Now(),
-		DateCreated: time.Now(),
-	}
-}
-
-func NewMockNote(content string, order int, sectionId int) *Note {
+func NewNote(content string, order int, sectionId int) *Note {
 	return &Note{
 		Content:     content,
 		DateUpdated: time.Now(),

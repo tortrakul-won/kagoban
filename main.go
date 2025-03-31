@@ -7,6 +7,7 @@ package main
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"os"
@@ -58,9 +59,10 @@ type models struct {
 	InputPrompt      string
 	Operation        string // Might change to enum
 	Debug            string
+	StatusText       string
 }
 
-func initialModel() models {
+func LoadMockData() models {
 	mockNotes := []*Note{} // Create a slice with capacity for 4 items
 	for i := range 4 {
 		mockNotes = append(mockNotes, NewNote("test"+strconv.Itoa(i), i, 0))
@@ -69,18 +71,50 @@ func initialModel() models {
 		mockNotes = append(mockNotes, NewNote("test"+strconv.Itoa(i), i, 1))
 	}
 
-	ti := textinput.New()
-	ti.CharLimit = 40
-	ti.Width = 40
-
 	return models{
 		Notes: mockNotes,
 		SectionData: []Section{
 			{ID: 0, Order: 0, Name: "Uncategorized"},
 			{ID: 1, Order: 1, Name: "Inbox"},
 		},
-		TextInput: ti,
 	}
+}
+
+func initialModel() models {
+	model, err := LoadProgramStateFromJson()
+	if err != nil {
+		model = LoadMockData()
+	}
+	ti := NewTextInputSetting()
+
+	model.TextInput = ti
+	return model
+}
+
+func NewTextInputSetting() textinput.Model {
+	ti := textinput.New()
+	ti.CharLimit = 40
+	ti.Width = 40
+
+	return ti
+}
+
+func LoadProgramStateFromJson() (models, error) {
+	jsonData, err := os.ReadFile("./data/save_file.json")
+	if err != nil {
+		return models{}, err
+	}
+	type StateDTO struct {
+		SectionData []Section
+		Notes       []*Note
+	}
+
+	var dto StateDTO
+	if err := json.Unmarshal(jsonData, &dto); err != nil {
+		return models{}, err
+	}
+
+	return models{Notes: dto.Notes, SectionData: dto.SectionData}, nil
 }
 
 func (m models) Init() tea.Cmd {
@@ -102,6 +136,7 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.RepopulateDisplayOrder()
 		m.IsInit = true
 	}
+	m.StatusText = ""
 	dp := m.UIControl.DisplayOrder
 	/*
 		Lets think about the algo
@@ -350,34 +385,61 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, cmd
 
 			case "D":
+				{
+					if len(m.SectionData) == 1 {
+						break
+					}
 
-				if len(m.SectionData) == 1 {
-					break
-				}
-
-				sectionIdx := slices.IndexFunc(m.SectionData, func(sec Section) bool {
-					return sec.Order == m.UIControl.SectionCursor
-				})
-
-				if sectionIdx != -1 {
-					sec := m.SectionData[sectionIdx]
-					//Delete Notes Data
-					m.Notes = slices.DeleteFunc(m.Notes, func(n *Note) bool {
-						return n.SectionID == sec.ID
+					sectionIdx := slices.IndexFunc(m.SectionData, func(sec Section) bool {
+						return sec.Order == m.UIControl.SectionCursor
 					})
+
+					if sectionIdx != -1 {
+						sec := m.SectionData[sectionIdx]
+						//Delete Notes Data
+						m.Notes = slices.DeleteFunc(m.Notes, func(n *Note) bool {
+							return n.SectionID == sec.ID
+						})
+					}
+
+					//Delete Section Data
+					// m.SectionData = slices.DeleteFunc(m.SectionData, func(sec Section) bool { return sec.Order == m.UIControl.SectionCursor })
+					m.SectionData = slices.Delete(m.SectionData, sectionIdx, sectionIdx+1)
+					//Recalculate Section Order
+					m.RepopulateDisplayOrder()
+					RecalulateSectionOrder(m.SectionData)
+
+					if m.UIControl.SectionCursor > 0 {
+						m.UIControl.SectionCursor--
+					}
 				}
+			case "ctrl+s":
+				{
+					saveData := map[string]interface{}{
+						"SectionData": m.SectionData,
+						"Notes":       m.Notes,
+					}
 
-				//Delete Section Data
-				// m.SectionData = slices.DeleteFunc(m.SectionData, func(sec Section) bool { return sec.Order == m.UIControl.SectionCursor })
-				m.SectionData = slices.Delete(m.SectionData, sectionIdx, sectionIdx+1)
-				//Recalculate Section Order
-				m.RepopulateDisplayOrder()
-				RecalulateSectionOrder(m.SectionData)
+					jsonData, err := json.MarshalIndent(saveData, "", "    ")
+					if err != nil {
+						m.Debug = err.Error()
+					}
 
-				if m.UIControl.SectionCursor > 0 {
-					m.UIControl.SectionCursor--
+					err = os.WriteFile("./data/save_file.json", jsonData, 0600)
+
+					if err != nil {
+						m.Debug = err.Error()
+					}
+
+					m.StatusText = "Data Saved!"
+				}
+			case "ctrl+r":
+				{
+					m = LoadMockData()
+					m.TextInput = NewTextInputSetting()
 				}
 			}
+
 		}
 	}
 
@@ -619,6 +681,8 @@ func (m models) View() string {
 		allText += "\nPress q to quit.\n"
 
 	}
+
+	allText += m.StatusText
 
 	// DEBUG
 	// allText += spew.Sdump(m.SectionData)

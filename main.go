@@ -167,6 +167,19 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.UIControl.SectionCursor = maxOrder + 1
 						m.RepopulateDisplayOrder()
 					}
+
+				case "EDITSECTION":
+					{
+						m.TextInput.Blur()
+						name := m.TextInput.Value()
+						section, ok := FindSectionDataByOrder(m.SectionData, m.UIControl.SectionCursor)
+						if ok {
+							EditSection(section, name)
+						}
+
+						m.TextInput.SetValue("")
+						m.RepopulateDisplayOrder()
+					}
 				}
 
 				//Reset to default. ready for new Operation
@@ -202,7 +215,7 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// The "down" and "j" keys move the cursor down
 			case "down", "j":
-				section, ok := FindSectionByOrder(m.SectionData, m.UIControl.SectionCursor)
+				section, ok := FindSectionDataByOrder(m.SectionData, m.UIControl.SectionCursor)
 				if !ok {
 					return m, nil
 				}
@@ -215,7 +228,7 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.UIControl.SectionCursor > 0 {
 					m.UIControl.SectionCursor--
 
-					section, ok := FindSectionByOrder(m.SectionData, m.UIControl.SectionCursor)
+					section, ok := FindSectionDataByOrder(m.SectionData, m.UIControl.SectionCursor)
 					if !ok {
 						return m, nil
 					}
@@ -233,7 +246,7 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.UIControl.SectionCursor < len(dp)-1 {
 					m.UIControl.SectionCursor++
 
-					section, ok := FindSectionByOrder(m.SectionData, m.UIControl.SectionCursor)
+					section, ok := FindSectionDataByOrder(m.SectionData, m.UIControl.SectionCursor)
 					if !ok {
 						return m, nil
 					}
@@ -248,7 +261,7 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// The "enter" key and the spacebar (a literal space) toggle
 			// the selected state for the item that the cursor is pointing at.
 			case "enter", " ":
-				section, ok := FindSectionByOrder(m.SectionData, m.UIControl.SectionCursor)
+				section, ok := FindSectionDataByOrder(m.SectionData, m.UIControl.SectionCursor)
 				if !ok {
 					return m, nil
 				}
@@ -287,7 +300,7 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, cmd
 
 			case "d":
-				section, ok := FindSectionByOrder(m.SectionData, m.UIControl.SectionCursor)
+				section, ok := FindSectionDataByOrder(m.SectionData, m.UIControl.SectionCursor)
 				if !ok {
 					return m, nil
 				}
@@ -317,6 +330,21 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.InputPrompt = "What is the name of this section?"
 				m.TextInput.Placeholder = "Type the section's name here"
 				m.TextInput.SetValue("")
+				m.TextInput, cmd = m.TextInput.Update(nil)
+				m.TextInput.Focus()
+				return m, cmd
+
+			case "E":
+				m.Operation = "EDITSECTION"
+				m.IsTextInputShown = true
+				m.InputPrompt = "What is the name of this section?"
+				m.TextInput.Placeholder = "Type the section's name here"
+
+				if section, ok := FindSectionDataByOrder(m.SectionData, m.UIControl.SectionCursor); ok {
+					m.TextInput.SetValue(section.Name)
+				} else {
+					m.TextInput.SetValue("")
+				}
 				m.TextInput, cmd = m.TextInput.Update(nil)
 				m.TextInput.Focus()
 				return m, cmd
@@ -358,7 +386,7 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func AddNote(m *models, content string) bool {
-	section, ok := FindSectionByOrder(m.SectionData, m.UIControl.SectionCursor)
+	section, ok := FindSectionDataByOrder(m.SectionData, m.UIControl.SectionCursor)
 	if !ok {
 		return false
 	}
@@ -407,8 +435,16 @@ func EditNote(note *Note, content string) bool {
 	return false
 }
 
+func EditSection(section *Section, content string) bool {
+	if section != nil {
+		section.Name = content
+		return true
+	}
+	return false
+}
+
 func FindNoteByBothOrder(m models, sectionOrder int, noteOrder int) *Note {
-	section, ok := FindSectionByOrder(m.SectionData, sectionOrder)
+	section, ok := FindSectionDataByOrder(m.SectionData, sectionOrder)
 	if !ok {
 		return nil
 	}
@@ -422,15 +458,15 @@ func FindNoteByBothOrder(m models, sectionOrder int, noteOrder int) *Note {
 	return nil
 }
 
-func FindSectionByOrder(data []Section, order int) (Section, bool) {
+func FindSectionDataByOrder(data []Section, order int) (*Section, bool) {
 	sIX := slices.IndexFunc(data, func(s Section) bool {
 		return s.Order == order
 	})
 
 	if sIX != -1 {
-		return data[sIX], true
+		return &data[sIX], true
 	} else {
-		return Section{}, false
+		return &Section{}, false
 	}
 }
 
@@ -447,7 +483,7 @@ func FindNoteByItsOrder(notes []*Note, order int) *Note {
 }
 
 func FindNotesBySectionOrder(data models, order int) ([]*Note, bool) {
-	section, ok := FindSectionByOrder(data.SectionData, order)
+	section, ok := FindSectionDataByOrder(data.SectionData, order)
 	if !ok {
 		return []*Note{}, false
 	}
@@ -526,9 +562,9 @@ func (m models) View() string {
 		sectionText := ""
 
 		if m.UIControl.SectionCursor == section.Order {
-			sectionText = bold.Underline(true).Render(section.Name + strconv.Itoa(section.ID))
+			sectionText = bold.Underline(true).Render(section.Name)
 		} else {
-			sectionText = bold.Render(section.Name + strconv.Itoa(section.ID))
+			sectionText = bold.Render(section.Name)
 		}
 
 		sectionText += "\n\n"
@@ -586,7 +622,7 @@ func (m models) View() string {
 
 	// DEBUG
 	// allText += spew.Sdump(m.SectionData)
-	// allText += m.Debug
+	allText += m.Debug
 	// allText += fmt.Sprintf("RowCursor = %d,SectionCursor= %d\n", m.UIControl.RowCursor, m.UIControl.SectionCursor)
 	// allText += fmt.Sprintf("DisplayOrder Len = %d\n", len(m.UIControl.DisplayOrder))
 	// for _, s := range m.SectionData {

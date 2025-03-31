@@ -12,6 +12,7 @@ import (
 	"os"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -69,8 +70,8 @@ func initialModel() models {
 	}
 
 	ti := textinput.New()
-	ti.CharLimit = 156
-	ti.Width = 20
+	ti.CharLimit = 40
+	ti.Width = 40
 
 	return models{
 		Notes: mockNotes,
@@ -124,15 +125,51 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyMsg:
 			switch msg.String() {
 			case "enter":
-				if m.Operation == "ADDNOTE" {
-					m.Debug = "123"
-					m.TextInput.Blur()
-					content := m.TextInput.Value()
-					AddNote(&m, content)
+				switch m.Operation {
+				case "ADDNOTE":
+					{
+						m.TextInput.Blur()
+						content := m.TextInput.Value()
+						AddNote(&m, content)
+						m.TextInput.SetValue("")
+						if notes, ok := FindNotesBySectionOrder(m, m.UIControl.SectionCursor); ok {
+							m.UIControl.RowCursor = len(notes) - 1
+						}
+					}
+				case "EDITNOTE":
+					{
+						m.TextInput.Blur()
+						content := m.TextInput.Value()
+						note := FindNoteByBothOrder(m, m.UIControl.SectionCursor, m.UIControl.RowCursor)
+						if note != nil {
+							EditNote(note, content)
+							note.DateUpdated = time.Now()
+						}
+						m.TextInput.SetValue("")
+					}
+				case "ADDSECTION":
+					{
+						m.TextInput.Blur()
+						name := m.TextInput.Value()
+						name = strings.TrimSpace(name)
+						if name == "" {
+							name = "Unnamed Section"
+						}
 
-					m.TextInput.SetValue("")
+						maxOrder := -1
+						if len(m.SectionData) > 0 {
+							maxOrder = slices.MaxFunc(m.SectionData, func(a, b Section) int {
+								return a.Order - b.Order
+							}).Order
+						}
+						mockId++
+						m.SectionData = append(m.SectionData, NewSection(name, maxOrder+1, mockId))
+						m.UIControl.SectionCursor = maxOrder + 1
+						m.RepopulateDisplayOrder()
+					}
 				}
 
+				//Reset to default. ready for new Operation
 				m.Operation = ""
 				m.IsTextInputShown = false
 
@@ -234,6 +271,21 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.TextInput.Focus()
 				return m, cmd
 
+			case "e":
+				m.Operation = "EDITNOTE"
+				m.IsTextInputShown = true
+				m.InputPrompt = "What is the content of the note?"
+				m.TextInput.Placeholder = "Type note content here"
+				note := FindNoteByBothOrder(m, m.UIControl.SectionCursor, m.UIControl.RowCursor)
+				if note != nil {
+					m.TextInput.SetValue(note.Content)
+				} else {
+					m.TextInput.SetValue("")
+				}
+				m.TextInput, cmd = m.TextInput.Update(nil)
+				m.TextInput.Focus()
+				return m, cmd
+
 			case "d":
 				section, ok := FindSectionByOrder(m.SectionData, m.UIControl.SectionCursor)
 				if !ok {
@@ -260,15 +312,14 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 			case "A":
-				maxOrder := -1
-				if len(m.SectionData) > 0 {
-					maxOrder = slices.MaxFunc(m.SectionData, func(a, b Section) int {
-						return a.Order - b.Order
-					}).Order
-				}
-				mockId++
-				m.SectionData = append(m.SectionData, NewMockSection("TestSection", maxOrder+1, mockId))
-				m.RepopulateDisplayOrder()
+				m.Operation = "ADDSECTION"
+				m.IsTextInputShown = true
+				m.InputPrompt = "What is the name of this section?"
+				m.TextInput.Placeholder = "Type the section's name here"
+				m.TextInput.SetValue("")
+				m.TextInput, cmd = m.TextInput.Update(nil)
+				m.TextInput.Focus()
+				return m, cmd
 
 			case "D":
 
@@ -348,6 +399,29 @@ func AddNote(m *models, content string) bool {
 	return true
 }
 
+func EditNote(note *Note, content string) bool {
+	if note != nil {
+		note.Content = content
+		return true
+	}
+	return false
+}
+
+func FindNoteByBothOrder(m models, sectionOrder int, noteOrder int) *Note {
+	section, ok := FindSectionByOrder(m.SectionData, sectionOrder)
+	if !ok {
+		return nil
+	}
+
+	if sectionNotePtrs, ok := m.UIControl.DisplayOrder[section.ID]; ok {
+		if note := FindNoteByItsOrder(sectionNotePtrs, m.UIControl.RowCursor); note != nil {
+			return note
+		}
+	}
+
+	return nil
+}
+
 func FindSectionByOrder(data []Section, order int) (Section, bool) {
 	sIX := slices.IndexFunc(data, func(s Section) bool {
 		return s.Order == order
@@ -360,6 +434,18 @@ func FindSectionByOrder(data []Section, order int) (Section, bool) {
 	}
 }
 
+func FindNoteByItsOrder(notes []*Note, order int) *Note {
+	noteIX := slices.IndexFunc(notes, func(note *Note) bool {
+		return note.Order == order
+	})
+
+	if noteIX != -1 {
+		return notes[noteIX]
+	} else {
+		return nil
+	}
+}
+
 func FindNotesBySectionOrder(data models, order int) ([]*Note, bool) {
 	section, ok := FindSectionByOrder(data.SectionData, order)
 	if !ok {
@@ -367,7 +453,7 @@ func FindNotesBySectionOrder(data models, order int) ([]*Note, bool) {
 	}
 	notes, ok := data.UIControl.DisplayOrder[section.ID]
 
-	return notes, true
+	return notes, ok
 
 }
 
@@ -412,8 +498,6 @@ func (m models) View() string {
 
 	dpo := m.UIControl.DisplayOrder
 	sectionIDs := maps.Keys(dpo)
-
-	// return spew.Sdump(dpo)
 
 	//Collect Section Data
 	sectionList := []Section{}
@@ -563,7 +647,7 @@ func NewNote(content string, order int, sectionId int) *Note {
 	}
 }
 
-func NewMockSection(content string, order int, sectionId int) Section {
+func NewSection(content string, order int, sectionId int) Section {
 	return Section{
 		Name:  content,
 		ID:    sectionId,
@@ -575,7 +659,6 @@ type Section struct {
 	ID    int    // Unique identifier for the Section
 	Order int    // Display order
 	Name  string // Section name
-	// HighestNoteOrder int    // Store height notes order for ordering
 }
 
 type UIControl struct {

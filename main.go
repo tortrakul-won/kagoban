@@ -22,32 +22,29 @@ import (
 )
 
 const (
-	CardBorderColor = "#6495ED"
+	CardBorderColor    = "#FFBF00"
+	CardBackgroudColor = "#ffd747"
+	ForegroundColor    = "#000000"
 )
 
 var mockId = 10
 
 var systemStyle = lg.NewStyle().
-	BorderStyle(lg.DoubleBorder()).BorderForeground(lg.Color("#33ffaa")).
+	// BorderStyle(lg.DoubleBorder()).BorderForeground(lg.Color("#33ffaa")).
 	// Background(lg.Color("#71797E")).
 	// Foreground(lg.Color("#ffffff"))
 	Padding(1, 2)
 
 var cardStyle = lg.NewStyle().
-	BorderStyle(lg.RoundedBorder()).BorderForeground(lg.Color(CardBorderColor)).
+	BorderStyle(lg.HiddenBorder()).BorderForeground(lg.Color(CardBackgroudColor)).
 	// BorderBackground(lg.Color("#FFBF00")).
-	// Background(lg.Color("#FFBF00")).
-	// Foreground(lg.Color("#ffffff")).
-	Padding(1, 2, 1, 0).
-	Height(4).Width(20)
+	Background(lg.Color(CardBackgroudColor)).
+	Foreground(lg.Color(ForegroundColor)).
+	Padding(1, 2, 1, 2).
+	Height(5).Width(20)
 
-var selectedStyle = lg.NewStyle().Inherit(cardStyle).
-	BorderStyle(lg.DoubleBorder()).BorderForeground(lg.Color(CardBorderColor)).
-	Padding(1, 2, 1, 0)
-
-var bold = lg.NewStyle().Bold(true)
-
-// var bgStyle = lg.NewStyle().Background(lg.Color("#FFBF00"))
+var sectionHeaderStyle = lg.NewStyle().Bold(true).
+	Background(lg.Color(CardBackgroudColor)).Padding(0, 1).Foreground(lg.Color(ForegroundColor))
 
 type models struct {
 	UIControl        UIControl
@@ -593,6 +590,7 @@ func (m models) View() string {
 
 	// The header
 	allText := ""
+	sectionLen := len(m.SectionData)
 
 	dpo := m.UIControl.DisplayOrder
 	sectionIDs := maps.Keys(dpo)
@@ -624,9 +622,9 @@ func (m models) View() string {
 		sectionText := ""
 
 		if m.UIControl.SectionCursor == section.Order {
-			sectionText = bold.Underline(true).Render(section.Name)
+			sectionText = sectionHeaderStyle.Underline(true).Render(section.Name)
 		} else {
-			sectionText = bold.Render(section.Name)
+			sectionText = sectionHeaderStyle.Render(section.Name)
 		}
 
 		sectionText += "\n\n"
@@ -638,26 +636,26 @@ func (m models) View() string {
 		// Iterate over our sortedNotes in the section
 		for _, note := range sortedNotes {
 			// Is the cursor pointing at this item?
-			cursor := " " // no cursor
+
+			style := cardStyle
+			style = style.Width((m.UIControl.TermSize.Width - 5) / (sectionLen + 3))
+			// cursor := " " // no cursor
 			if m.UIControl.RowCursor == note.Order && m.UIControl.SectionCursor == section.Order {
-				cursor = ">" // cursor!
+				// cursor = ">" // cursor!
+
+				style = style.BorderStyle(lg.DoubleBorder()).Background(lg.Color(CardBackgroudColor))
 			}
 
 			// Is this item selected?
-			checked := " " // not selected
+			// checked := " " // not selected
 			if note.IsChecked {
-				checked = "x"
+				style = style.Background(lg.ANSIColor(7)).Foreground(lg.ANSIColor(8))
+				// checked = "x"
 			}
 
-			tmpS := fmt.Sprintf(" %s[%s] %s", cursor, checked, note.Content)
-
-			if m.UIControl.RowCursor == note.Order && m.UIControl.SectionCursor == section.Order {
-				tmpS = selectedStyle.Render(tmpS)
-			} else {
-				tmpS = cardStyle.Render(tmpS)
-			}
-
-			// s = lg.JoinVertical(lg.Bottom, s, tmpS)
+			// tmpS := fmt.Sprintf(" %s[%s] %s", cursor, checked, note.Content)
+			tmpS := note.Content
+			tmpS = style.Render(tmpS)
 			sectionText += tmpS
 			sectionText += "\n"
 		}
@@ -687,16 +685,9 @@ func (m models) View() string {
 	// DEBUG
 	// allText += spew.Sdump(m.SectionData)
 	allText += m.Debug
-	// allText += fmt.Sprintf("RowCursor = %d,SectionCursor= %d\n", m.UIControl.RowCursor, m.UIControl.SectionCursor)
-	// allText += fmt.Sprintf("DisplayOrder Len = %d\n", len(m.UIControl.DisplayOrder))
-	// for _, s := range m.SectionData {
-	// 	allText += strconv.Itoa(s.ID)
-	// 	allText += ", "
-	// }
-	// section, _ := FindSectionByOrder(m.SectionData, m.UIControl.SectionCursor)
-	// allText += spew.Sdump(m.UIControl.DisplayOrder[section.ID])
 
 	// Send the UI for rendering
+
 	return systemStyle.Width(m.UIControl.TermSize.Width - 3).Height(m.UIControl.TermSize.Height - 5).Render(allText)
 
 }
@@ -715,6 +706,10 @@ func randomHex(n int) string {
 		return ""
 	}
 	return "#" + hex.EncodeToString(bytes)
+}
+
+func clamp(minVal, val, maxVal int) int {
+	return max(min(maxVal, val), minVal)
 }
 
 func main() {

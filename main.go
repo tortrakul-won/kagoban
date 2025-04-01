@@ -23,7 +23,7 @@ import (
 
 const (
 	CardBorderColor    = "#FFBF00"
-	CardBackgroudColor = "#F9D973"
+	CardBackgroudColor = "#ffd75f"
 	ForegroundColor    = "#000000"
 )
 
@@ -621,7 +621,12 @@ func (m models) View() string {
 		sectionText := ""
 
 		if m.UIControl.SectionCursor == section.Order {
-			sectionText = sectionHeaderStyle.Underline(true).Italic(true).Render(section.Name)
+			sectionText = sectionHeaderStyle.Underline(true).
+				// Italic(true).
+				Background(lg.Color(ForegroundColor)).
+				Foreground(lg.Color("#ffd700")).
+				Render(section.Name)
+
 		} else {
 			sectionText = sectionHeaderStyle.Render(section.Name)
 		}

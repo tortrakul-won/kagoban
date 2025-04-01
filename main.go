@@ -23,7 +23,7 @@ import (
 
 const (
 	CardBorderColor    = "#FFBF00"
-	CardBackgroudColor = "#ffd747"
+	CardBackgroudColor = "#F9D973"
 	ForegroundColor    = "#000000"
 )
 
@@ -37,7 +37,6 @@ var systemStyle = lg.NewStyle().
 
 var cardStyle = lg.NewStyle().
 	BorderStyle(lg.HiddenBorder()).BorderForeground(lg.Color(CardBackgroudColor)).
-	// BorderBackground(lg.Color("#FFBF00")).
 	Background(lg.Color(CardBackgroudColor)).
 	Foreground(lg.Color(ForegroundColor)).
 	Padding(1, 2, 1, 2).
@@ -622,7 +621,7 @@ func (m models) View() string {
 		sectionText := ""
 
 		if m.UIControl.SectionCursor == section.Order {
-			sectionText = sectionHeaderStyle.Underline(true).Render(section.Name)
+			sectionText = sectionHeaderStyle.Underline(true).Italic(true).Render(section.Name)
 		} else {
 			sectionText = sectionHeaderStyle.Render(section.Name)
 		}

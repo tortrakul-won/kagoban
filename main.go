@@ -5,14 +5,11 @@ package main
 // You may also need to run `go mod tidy` to download bubbletea and its
 // dependencies.
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"maps"
 	"os"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -21,71 +18,7 @@ import (
 	lg "github.com/charmbracelet/lipgloss"
 )
 
-const (
-	CardBorderColor    = "#FFBF00"
-	CardBackgroudColor = "#ffd75f"
-	ForegroundColor    = "#000000"
-)
-
 var mockId = 10
-
-var systemStyle = lg.NewStyle().
-	// BorderStyle(lg.DoubleBorder()).BorderForeground(lg.Color("#33ffaa")).
-	// Background(lg.Color("#71797E")).
-	// Foreground(lg.Color("#ffffff"))
-	Padding(1, 2)
-
-var cardStyle = lg.NewStyle().
-	BorderStyle(lg.HiddenBorder()).BorderForeground(lg.Color(CardBackgroudColor)).
-	Background(lg.Color(CardBackgroudColor)).
-	Foreground(lg.Color(ForegroundColor)).
-	Padding(1, 2, 1, 2).
-	Height(5).Width(20)
-
-var sectionHeaderStyle = lg.NewStyle().Bold(true).
-	Background(lg.Color(CardBackgroudColor)).Padding(0, 1).Foreground(lg.Color(ForegroundColor))
-
-type models struct {
-	UIControl        UIControl
-	Notes            []*Note
-	SectionData      []Section
-	IsInit           bool
-	IsTextInputShown bool
-	TextInput        textinput.Model
-	InputPrompt      string
-	Operation        string // Might change to enum
-	Debug            string
-	StatusText       string
-}
-
-func LoadMockData() models {
-	mockNotes := []*Note{} // Create a slice with capacity for 4 items
-	for i := range 4 {
-		mockNotes = append(mockNotes, NewNote("test"+strconv.Itoa(i), i, 0))
-	}
-	for i := range 2 {
-		mockNotes = append(mockNotes, NewNote("test"+strconv.Itoa(i), i, 1))
-	}
-
-	return models{
-		Notes: mockNotes,
-		SectionData: []Section{
-			{ID: 0, Order: 0, Name: "Uncategorized"},
-			{ID: 1, Order: 1, Name: "Inbox"},
-		},
-	}
-}
-
-func initialModel() models {
-	model, err := LoadProgramStateFromJson()
-	if err != nil {
-		model = LoadMockData()
-	}
-	ti := NewTextInputSetting()
-
-	model.TextInput = ti
-	return model
-}
 
 func NewTextInputSetting() textinput.Model {
 	ti := textinput.New()
@@ -95,25 +28,7 @@ func NewTextInputSetting() textinput.Model {
 	return ti
 }
 
-func LoadProgramStateFromJson() (models, error) {
-	jsonData, err := os.ReadFile("./data/save_file.json")
-	if err != nil {
-		return models{}, err
-	}
-	type StateDTO struct {
-		SectionData []Section
-		Notes       []*Note
-	}
-
-	var dto StateDTO
-	if err := json.Unmarshal(jsonData, &dto); err != nil {
-		return models{}, err
-	}
-
-	return models{Notes: dto.Notes, SectionData: dto.SectionData}, nil
-}
-
-func (m models) Init() tea.Cmd {
+func (m ProgramModel) Init() tea.Cmd {
 	// Just return `nil`, which means "no I/O right now, please."
 
 	/*
@@ -122,7 +37,7 @@ func (m models) Init() tea.Cmd {
 	return textinput.Blink
 }
 
-func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m ProgramModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	/*
 		Group Notes with the same ID to Display order
 	*/
@@ -443,7 +358,7 @@ func (m models) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func AddNote(m *models, content string) bool {
+func AddNote(m *ProgramModel, content string) bool {
 	section, ok := FindSectionDataByOrder(m.SectionData, m.UIControl.SectionCursor)
 	if !ok {
 		return false
@@ -501,7 +416,7 @@ func EditSection(section *Section, content string) bool {
 	return false
 }
 
-func FindNoteByBothOrder(m models, sectionOrder int, noteOrder int) *Note {
+func FindNoteByBothOrder(m ProgramModel, sectionOrder int, noteOrder int) *Note {
 	section, ok := FindSectionDataByOrder(m.SectionData, sectionOrder)
 	if !ok {
 		return nil
@@ -540,7 +455,7 @@ func FindNoteByItsOrder(notes []*Note, order int) *Note {
 	}
 }
 
-func FindNotesBySectionOrder(data models, order int) ([]*Note, bool) {
+func FindNotesBySectionOrder(data ProgramModel, order int) ([]*Note, bool) {
 	section, ok := FindSectionDataByOrder(data.SectionData, order)
 	if !ok {
 		return []*Note{}, false
@@ -573,19 +488,7 @@ func RecalulateSectionOrder(section []Section) {
 
 }
 
-func (m *models) RepopulateDisplayOrder() {
-	m.UIControl.DisplayOrder = make(map[int][]*Note)
-	dp := m.UIControl.DisplayOrder
-
-	for _, section := range m.SectionData {
-		dp[section.ID] = make([]*Note, 0)
-	}
-	for _, notePtr := range m.Notes {
-		dp[notePtr.SectionID] = append(dp[notePtr.SectionID], notePtr)
-	}
-}
-
-func (m models) View() string {
+func (m ProgramModel) View() string {
 
 	// The header
 	allText := ""
@@ -694,26 +597,6 @@ func (m models) View() string {
 
 	return systemStyle.Width(m.UIControl.TermSize.Width - 3).Height(m.UIControl.TermSize.Height - 5).Render(allText)
 
-}
-
-func mapSlice(input []int, transform func(int) int) []int {
-	result := make([]int, len(input))
-	for i, v := range input {
-		result[i] = transform(v)
-	}
-	return result
-}
-
-func randomHex(n int) string {
-	bytes := make([]byte, n)
-	if _, err := rand.Read(bytes); err != nil {
-		return ""
-	}
-	return "#" + hex.EncodeToString(bytes)
-}
-
-func clamp(minVal, val, maxVal int) int {
-	return max(min(maxVal, val), minVal)
 }
 
 func main() {

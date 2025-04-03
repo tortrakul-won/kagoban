@@ -456,11 +456,52 @@ func (m ProgramModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					m.UIControl.SectionCursor++
 				}
+			case "alt+shift+left":
+				{
+					if m.UIControl.SectionCursor == 0 {
+						break
+					}
+					currSection, ok := FindSectionDataByOrder(m.SectionData, m.UIControl.SectionCursor)
+					if !ok {
+						break
+					}
+					passSection, ok := FindSectionDataByOrder(m.SectionData, m.UIControl.SectionCursor-1)
+					if !ok {
+						break
+					}
 
-				// default:
-				// 	{
-				// 		m.Debug = msg.String()
-				// 	}
+					currSection.Order--
+					passSection.Order++
+
+					m.UIControl.SectionCursor--
+
+				}
+
+			case "alt+shift+right":
+				{
+					if m.UIControl.SectionCursor == len(m.SectionData)-1 {
+						break
+					}
+
+					currSection, ok := FindSectionDataByOrder(m.SectionData, m.UIControl.SectionCursor)
+					if !ok {
+						break
+					}
+					nextSection, ok := FindSectionDataByOrder(m.SectionData, m.UIControl.SectionCursor+1)
+					if !ok {
+						break
+					}
+
+					currSection.Order++
+					nextSection.Order--
+
+					m.UIControl.SectionCursor++
+				}
+
+			default:
+				{
+					m.Debug = msg.String()
+				}
 			}
 		}
 	}

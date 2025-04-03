@@ -55,10 +55,6 @@ func (m ProgramModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			0. There will be time where all order will be zero  <- this likely won't happen when you connect to database
 					so lets just skip this logic and just mock them
 					TODO: mock order data when init
-
-			1. element might get add later with zero value order
-					This also mean I should keep current Max value globally at least in that section
-
 	*/
 
 	if m.IsTextInputShown {
@@ -358,136 +354,6 @@ func (m ProgramModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func AddNote(m *ProgramModel, content string) bool {
-	section, ok := FindSectionDataByOrder(m.SectionData, m.UIControl.SectionCursor)
-	if !ok {
-		return false
-	}
-	sectionNotePtrs, ok := m.UIControl.DisplayOrder[section.ID]
-	if ok {
-		maxOrder := -1
-		if len(sectionNotePtrs) > 0 {
-			maxOrder = slices.MaxFunc(sectionNotePtrs, func(a, b *Note) int {
-				return a.Order - b.Order
-			}).Order
-		} else {
-			//Hijack this control flow to fix cursor after add notes in an empty section
-			m.UIControl.RowCursor = 0
-		}
-
-		sectionIdx := slices.IndexFunc(m.SectionData, func(sec Section) bool {
-			return sec.Order == m.UIControl.SectionCursor
-		})
-		/*TODO There must be better way to link the data. This manually delete is not bad but
-		I have a feeling that it can be better
-		*/
-		/*
-			Maybe I should just manipulate the original array and repopulate displayOrder every Update
-		*/
-		if sectionIdx != -1 {
-			sec := m.SectionData[sectionIdx]
-			buffer := NewNote(content, maxOrder+1, sec.ID)
-			tmp := append(sectionNotePtrs, buffer)
-			m.UIControl.DisplayOrder[section.ID] = tmp
-
-			m.Notes = slices.DeleteFunc(m.Notes, func(n *Note) bool {
-				return n.SectionID == sec.ID
-			})
-
-			m.Notes = append(m.Notes, tmp...)
-		}
-	}
-	return true
-}
-
-func EditNote(note *Note, content string) bool {
-	if note != nil {
-		note.Content = content
-		return true
-	}
-	return false
-}
-
-func EditSection(section *Section, content string) bool {
-	if section != nil {
-		section.Name = content
-		return true
-	}
-	return false
-}
-
-func FindNoteByBothOrder(m ProgramModel, sectionOrder int, noteOrder int) *Note {
-	section, ok := FindSectionDataByOrder(m.SectionData, sectionOrder)
-	if !ok {
-		return nil
-	}
-
-	if sectionNotePtrs, ok := m.UIControl.DisplayOrder[section.ID]; ok {
-		if note := FindNoteByItsOrder(sectionNotePtrs, m.UIControl.RowCursor); note != nil {
-			return note
-		}
-	}
-
-	return nil
-}
-
-func FindSectionDataByOrder(data []Section, order int) (*Section, bool) {
-	sIX := slices.IndexFunc(data, func(s Section) bool {
-		return s.Order == order
-	})
-
-	if sIX != -1 {
-		return &data[sIX], true
-	} else {
-		return &Section{}, false
-	}
-}
-
-func FindNoteByItsOrder(notes []*Note, order int) *Note {
-	noteIX := slices.IndexFunc(notes, func(note *Note) bool {
-		return note.Order == order
-	})
-
-	if noteIX != -1 {
-		return notes[noteIX]
-	} else {
-		return nil
-	}
-}
-
-func FindNotesBySectionOrder(data ProgramModel, order int) ([]*Note, bool) {
-	section, ok := FindSectionDataByOrder(data.SectionData, order)
-	if !ok {
-		return []*Note{}, false
-	}
-	notes, ok := data.UIControl.DisplayOrder[section.ID]
-
-	return notes, ok
-
-}
-
-func RecalulateNoteOrder(notes []*Note) {
-	slices.SortFunc(notes, func(a, b *Note) int {
-		return a.Order - b.Order
-	})
-
-	for i := range len(notes) {
-		notes[i].Order = i
-	}
-
-}
-
-func RecalulateSectionOrder(section []Section) {
-	slices.SortFunc(section, func(a, b Section) int {
-		return a.Order - b.Order
-	})
-
-	for i := range len(section) {
-		section[i].Order = i
-	}
-
-}
-
 func (m ProgramModel) View() string {
 
 	// The header
@@ -510,7 +376,6 @@ func (m ProgramModel) View() string {
 			sectionList = append(sectionList, section)
 		}
 	}
-	//now we have section data
 
 	// sort section id by SectionData.Order
 	slices.SortFunc(sectionList, func(a, b Section) int {
@@ -604,53 +469,5 @@ func main() {
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Alas, there's been an error: %v", err)
 		os.Exit(1)
-	}
-}
-
-// Notes
-type Note struct {
-	ID          int       // Database ID, unique for each Note
-	Order       int       // Display order of the note
-	Content     string    // The content of the note
-	SectionID   int       // Pointer to the parent Section
-	DateUpdated time.Time // Timestamp when the note was last updated
-	DateCreated time.Time // Timestamp when the note was created
-	IsChecked   bool      // Is the note completed/checked?
-	IsDeleted   bool      // Flag for soft deletion
-}
-
-func NewNote(content string, order int, sectionId int) *Note {
-	return &Note{
-		Content:     content,
-		DateUpdated: time.Now(),
-		DateCreated: time.Now(),
-		Order:       order,
-		SectionID:   sectionId,
-	}
-}
-
-func NewSection(content string, order int, sectionId int) Section {
-	return Section{
-		Name:  content,
-		ID:    sectionId,
-		Order: order,
-	}
-}
-
-type Section struct {
-	ID    int    // Unique identifier for the Section
-	Order int    // Display order
-	Name  string // Section name
-}
-
-type UIControl struct {
-	IsDialogOpened bool            // Tracks if a dialog is open
-	LastUIBuffer   string          // Stores the last state or buffer for UI
-	DisplayOrder   map[int][]*Note // Map SectionIDs to corresponding Notes
-	RowCursor      int             // which to-do list item our cursor is pointing at in a section
-	SectionCursor  int             // which column(Section) our cursor is pointing at
-	TermSize       struct {        // terminal size. currently use for fullscreen
-		Width  int
-		Height int
 	}
 }

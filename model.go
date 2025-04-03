@@ -195,6 +195,9 @@ func FindNotesBySectionOrder(data ProgramModel, order int) ([]*Note, bool) {
 
 func RecalulateNoteOrder(notes []*Note) {
 	slices.SortFunc(notes, func(a, b *Note) int {
+		if a.Order == b.Order {
+			return -a.DateUpdated.Compare(b.DateUpdated)
+		}
 		return a.Order - b.Order
 	})
 

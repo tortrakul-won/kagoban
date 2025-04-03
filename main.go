@@ -345,8 +345,123 @@ func (m ProgramModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m = LoadMockData()
 					m.TextInput = NewTextInputSetting()
 				}
-			}
+			case "alt+up":
+				{
+					if m.UIControl.RowCursor == 0 {
+						break
+					}
 
+					notes, ok := FindNotesBySectionOrder(m, m.UIControl.SectionCursor)
+					if !ok {
+						break
+					}
+
+					curNote := FindNoteByItsOrder(notes, m.UIControl.RowCursor)
+					passNote := FindNoteByItsOrder(notes, m.UIControl.RowCursor-1)
+
+					curNote.Order = curNote.Order - 1
+					passNote.Order = passNote.ID + 1
+					m.UIControl.RowCursor--
+
+				}
+			case "alt+down":
+				{
+					notes, ok := FindNotesBySectionOrder(m, m.UIControl.SectionCursor)
+					if !ok {
+						break
+					}
+					if m.UIControl.RowCursor == len(notes)-1 {
+						break
+					}
+
+					curNote := FindNoteByItsOrder(notes, m.UIControl.RowCursor)
+					nextNote := FindNoteByItsOrder(notes, m.UIControl.RowCursor+1)
+
+					curNote.Order++
+					nextNote.Order--
+					m.UIControl.RowCursor++
+				}
+			case "alt+left":
+				{
+					if m.UIControl.SectionCursor == 0 {
+						break
+					}
+
+					currNote := FindNoteByBothOrder(m, m.UIControl.SectionCursor, m.UIControl.RowCursor)
+					if currNote == nil {
+						break
+					}
+
+					section, ok := FindSectionDataByOrder(m.SectionData, m.UIControl.SectionCursor-1)
+					if !ok {
+						break
+					}
+					currNote.SectionID = section.ID
+					currNote.DateUpdated = time.Now()
+
+					passSec, ok := FindNotesBySectionOrder(m, m.UIControl.SectionCursor-1)
+					if !ok {
+						break
+					}
+					passSec = append(passSec, currNote)
+					RecalulateNoteOrder(passSec)
+
+					curSec, ok := FindNotesBySectionOrder(m, m.UIControl.SectionCursor)
+					if !ok {
+						break
+					}
+					curSec = slices.DeleteFunc(curSec, func(n *Note) bool {
+						return n.Order == currNote.Order
+					})
+					RecalulateNoteOrder(curSec)
+
+					m.RepopulateDisplayOrder()
+					m.UIControl.SectionCursor--
+
+				}
+
+			case "alt+right":
+				{
+					if m.UIControl.SectionCursor == len(m.SectionData)-1 {
+						break
+					}
+
+					currNote := FindNoteByBothOrder(m, m.UIControl.SectionCursor, m.UIControl.RowCursor)
+					if currNote == nil {
+						break
+					}
+
+					section, ok := FindSectionDataByOrder(m.SectionData, m.UIControl.SectionCursor+1)
+					if !ok {
+						break
+					}
+					currNote.SectionID = section.ID
+					currNote.DateUpdated = time.Now()
+
+					nextSec, ok := FindNotesBySectionOrder(m, m.UIControl.SectionCursor+1)
+					if !ok {
+						break
+					}
+					nextSec = append(nextSec, currNote)
+					RecalulateNoteOrder(nextSec)
+
+					curSec, ok := FindNotesBySectionOrder(m, m.UIControl.SectionCursor)
+					if !ok {
+						break
+					}
+					curSec = slices.DeleteFunc(curSec, func(n *Note) bool {
+						return n.Order == currNote.Order
+					})
+					RecalulateNoteOrder(curSec)
+
+					m.UIControl.SectionCursor++
+				}
+
+				// default:
+				// 	{
+				// 		m.Debug = msg.String()
+				// 	}
+			}
 		}
 	}
 

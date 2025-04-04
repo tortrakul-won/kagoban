@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"encoding/json"
@@ -23,7 +23,7 @@ type ProgramModel struct {
 	StatusText       string
 }
 
-func initialModel() ProgramModel {
+func InitialModel() ProgramModel {
 
 	model, err := LoadProgramStateFromJson()
 	if os.IsNotExist(err) {
@@ -35,6 +35,14 @@ func initialModel() ProgramModel {
 
 	model.TextInput = ti
 	return model
+}
+
+func NewTextInputSetting() textinput.Model {
+	ti := textinput.New()
+	ti.CharLimit = 40
+	ti.Width = 40
+
+	return ti
 }
 
 func LoadProgramStateFromJson() (ProgramModel, error) {

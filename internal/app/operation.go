@@ -1,6 +1,8 @@
-package main
+package app
 
-import "slices"
+import (
+	"slices"
+)
 
 func AddNote(m *ProgramModel, content string) bool {
 	section, ok := FindSectionDataByOrder(m.SectionData, m.UIControl.SectionCursor)

@@ -1,4 +1,4 @@
-package main
+package style
 
 import "github.com/charmbracelet/lipgloss"
 
@@ -8,18 +8,18 @@ const (
 	ForegroundColor    = "#000000"
 )
 
-var systemStyle = lipgloss.NewStyle().
+var SystemStyle = lipgloss.NewStyle().
 	// BorderStyle(lipgloss.DoubleBorder()).BorderForeground(lipgloss.Color("#33ffaa")).
 	// Background(lipgloss.Color("#71797E")).
 	// Foreground(lipgloss.Color("#ffffff"))
 	Padding(1, 2)
 
-var cardStyle = lipgloss.NewStyle().
+var CardStyle = lipgloss.NewStyle().
 	BorderStyle(lipgloss.HiddenBorder()).BorderForeground(lipgloss.Color(CardBackgroudColor)).
 	Background(lipgloss.Color(CardBackgroudColor)).
 	Foreground(lipgloss.Color(ForegroundColor)).
 	Padding(1, 2, 1, 2).
 	Height(5).Width(20)
 
-var sectionHeaderStyle = lipgloss.NewStyle().Bold(true).
+var SectionHeaderStyle = lipgloss.NewStyle().Bold(true).
 	Background(lipgloss.Color(CardBackgroudColor)).Padding(0, 1).Foreground(lipgloss.Color(ForegroundColor))

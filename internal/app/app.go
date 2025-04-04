@@ -1,4 +1,4 @@
-package main
+package app
 
 // These imports will be used later on the tutorial. If you save the file
 // now, Go might complain they are unused, but that's fine.
@@ -13,20 +13,14 @@ import (
 	"strings"
 	"time"
 
+	"kagoban/internal/style"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	lg "github.com/charmbracelet/lipgloss"
 )
 
 var mockId = 10
-
-func NewTextInputSetting() textinput.Model {
-	ti := textinput.New()
-	ti.CharLimit = 40
-	ti.Width = 40
-
-	return ti
-}
 
 func (m ProgramModel) Init() tea.Cmd {
 	// Just return `nil`, which means "no I/O right now, please."
@@ -545,14 +539,14 @@ func (m ProgramModel) View() string {
 		sectionText := ""
 
 		if m.UIControl.SectionCursor == section.Order {
-			sectionText = sectionHeaderStyle.Underline(true).
+			sectionText = style.SectionHeaderStyle.Underline(true).
 				// Italic(true).
-				Background(lg.Color(ForegroundColor)).
+				Background(lg.Color(style.ForegroundColor)).
 				Foreground(lg.Color("#ffd700")).
 				Render(section.Name)
 
 		} else {
-			sectionText = sectionHeaderStyle.Render(section.Name)
+			sectionText = style.SectionHeaderStyle.Render(section.Name)
 		}
 
 		sectionText += "\n\n"
@@ -565,25 +559,25 @@ func (m ProgramModel) View() string {
 		for _, note := range sortedNotes {
 			// Is the cursor pointing at this item?
 
-			style := cardStyle
-			style = style.Width((m.UIControl.TermSize.Width - 5) / (sectionLen + 3))
+			carStyle := style.CardStyle
+			carStyle = carStyle.Width((m.UIControl.TermSize.Width - 5) / (sectionLen + 3))
 			// cursor := " " // no cursor
 			if m.UIControl.RowCursor == note.Order && m.UIControl.SectionCursor == section.Order {
 				// cursor = ">" // cursor!
 
-				style = style.BorderStyle(lg.DoubleBorder()).Background(lg.Color(CardBackgroudColor))
+				carStyle = carStyle.BorderStyle(lg.DoubleBorder()).Background(lg.Color(style.CardBackgroudColor))
 			}
 
 			// Is this item selected?
 			// checked := " " // not selected
 			if note.IsChecked {
-				style = style.Background(lg.ANSIColor(7)).Foreground(lg.ANSIColor(8))
+				carStyle = carStyle.Background(lg.ANSIColor(7)).Foreground(lg.ANSIColor(8))
 				// checked = "x"
 			}
 
 			// tmpS := fmt.Sprintf(" %s[%s] %s", cursor, checked, note.Content)
 			tmpS := note.Content
-			tmpS = style.Render(tmpS)
+			tmpS = carStyle.Render(tmpS)
 			sectionText += tmpS
 			sectionText += "\n"
 		}
@@ -616,14 +610,6 @@ func (m ProgramModel) View() string {
 
 	// Send the UI for rendering
 
-	return systemStyle.Width(m.UIControl.TermSize.Width - 3).Height(m.UIControl.TermSize.Height - 5).Render(allText)
+	return style.SystemStyle.Width(m.UIControl.TermSize.Width - 3).Height(m.UIControl.TermSize.Height - 5).Render(allText)
 
-}
-
-func main() {
-	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
-	if _, err := p.Run(); err != nil {
-		fmt.Printf("Alas, there's been an error: %v", err)
-		os.Exit(1)
-	}
 }

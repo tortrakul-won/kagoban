@@ -1,6 +1,11 @@
 package style
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"crypto/rand"
+	"encoding/hex"
+
+	"github.com/charmbracelet/lipgloss"
+)
 
 const (
 	CardBorderColor    = "#FFBF00"
@@ -23,3 +28,16 @@ var CardStyle = lipgloss.NewStyle().
 
 var SectionHeaderStyle = lipgloss.NewStyle().Bold(true).
 	Background(lipgloss.Color(CardBackgroudColor)).Padding(0, 1).Foreground(lipgloss.Color(ForegroundColor))
+
+func Clamp(minVal, val, maxVal int) int {
+	return max(min(maxVal, val), minVal)
+}
+
+// Use for debugging
+func RandomHex(n int) string {
+	bytes := make([]byte, n)
+	if _, err := rand.Read(bytes); err != nil {
+		return ""
+	}
+	return "#" + hex.EncodeToString(bytes)
+}
